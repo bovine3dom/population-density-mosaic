@@ -1,8 +1,27 @@
 -- ClickHouse. Set the mosaic dimensions here. Coordinates are zero-based.
 WITH
+    -- Set this to 'world' to skip the country filter.
+    'CG' AS selected_country,
+    -- Geonames place records approximate the country in each res-4 cell.
+    country_cells AS
+    (
+        SELECT
+            h3ToParent(h3, 4) AS parent_h3,
+            anyHeavy(country_code) AS dominant_country
+        FROM public_geonames
+        WHERE selected_country != 'world'
+            AND feature_class = 'P'
+            AND country_code != ''
+        GROUP BY parent_h3
+    ),
     pop_table as (
         select median(population) population, h3ToParent(h3, 7) h3
         from public_kontur_population_20231101
+        WHERE selected_country = 'world'
+            OR h3ToParent(h3, 4) IN (
+                SELECT parent_h3 FROM country_cells
+                WHERE dominant_country = selected_country
+            )
         group by all
     ),
     5 AS grid_width,
